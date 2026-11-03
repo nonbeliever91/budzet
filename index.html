@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Budżet">
+<title>Budżet Patryka</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#EDF0EB">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&amp;family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+/* layout: jedna kolumna jak kartka z zeszytu wydatków – pasek miesiąca u góry, pas „zostało”, grupy pozycji, dolne zakładki */
+:root{
+  --paper:#EDF0EB; --card:#FAFBF8; --ink:#16212A; --muted:#5B6971; --line:#D3DAD4; --accent:#2944C4;
+  --ok:#1E7A4C; --warn:#A86A12; --bad:#BF3129; --track:#DFE5E0;
+  --f-display:"Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", -apple-system, "Segoe UI", system-ui, sans-serif;
+  --f-num:"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0E1418; --card:#161F25; --ink:#E4EAE7; --muted:#95A3AA; --line:#25313A; --accent:#8A9DFF;
+    --ok:#4CC08A; --warn:#E0A54A; --bad:#F06B60; --track:#22303A; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0E1418; --card:#161F25; --ink:#E4EAE7; --muted:#95A3AA; --line:#25313A; --accent:#8A9DFF;
+  --ok:#4CC08A; --warn:#E0A54A; --bad:#F06B60; --track:#22303A; color-scheme: dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+details summary{cursor:pointer;color:var(--accent);margin:8px 0}
+html,body{height:100%;margin:0}
+body{background:var(--paper);color:var(--ink);font:15px/1.45 var(--f-body);-webkit-text-size-adjust:100%;}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+textarea.csv,.mono{font-family:var(--f-num)}
+#app{max-width:560px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 8px) 16px calc(env(safe-area-inset-bottom) + 96px)}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:5;background:var(--paper);padding:10px 0}
+.brand{font:800 20px/1 var(--f-display);letter-spacing:-.02em}
+.monthnav{display:flex;align-items:center;gap:4px}
+.monthnav button{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-size:20px;line-height:1}
+.monthnav button:disabled{opacity:.35;cursor:default}
+#monthLabel{min-width:132px;text-align:center;font-weight:600;text-transform:capitalize}
+.status{margin:8px 0;padding:12px 14px;border-radius:12px;background:var(--card);border:1px solid var(--line);color:var(--muted)}
+.status.err{border-color:var(--bad);color:var(--bad)}
+/* hero */
+.hero{margin:6px 0 14px;padding:18px 18px 16px;border-radius:20px;background:var(--ink);color:var(--paper)}
+.hero .lbl{font-size:13px;opacity:.75}
+.hero .big{font:800 44px/1.05 var(--f-display);letter-spacing:-.03em;margin:4px 0 2px;font-variant-numeric:tabular-nums}
+.hero .big.bad{color:#FF8A80}
+.hero .sub{font-size:13px;opacity:.8}
+.tape{height:8px;border-radius:99px;background:rgba(255,255,255,.18);margin-top:12px;overflow:hidden}
+.tape i{display:block;height:100%;background:var(--paper);border-radius:99px}
+.tape i.over{background:#FF8A80}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.tile .t{font-size:12px;color:var(--muted)}
+.tile .v{font-size:17px;font-weight:500;margin-top:2px}
+.tile .p{font-size:12px;color:var(--muted)}
+.pos{color:var(--ok)} .neg{color:var(--bad)}
+.monthnote{display:inline-block;margin:0 0 12px;padding:6px 10px;border-radius:99px;background:var(--card);border:1px dashed var(--accent);color:var(--accent);font-size:13px}
+/* groups */
+.group{margin:18px 0 6px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.group h2{font:600 13px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0}
+.group .gs{font-size:13px;color:var(--muted)}
+.list{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.row{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:11px 14px;border-top:1px solid var(--line);width:100%;text-align:left;background:none;border-left:0;border-right:0;border-bottom:0}
+.row:first-child{border-top:0}
+.row .n{font-weight:500}
+.row .a{text-align:right;font-size:14px}
+.row .a small{color:var(--muted)}
+.row .bar{grid-column:1 / -1;height:5px;border-radius:99px;background:var(--track);overflow:hidden;margin-top:6px}
+.row .bar i{display:block;height:100%;background:var(--accent)}
+.row .bar i.full{background:var(--ok)} .row .bar i.over{background:var(--bad)}
+.row .meta{grid-column:1 / -1;font-size:12px;color:var(--muted);display:flex;justify-content:space-between;gap:8px}
+.chip{font-size:11px;font-weight:600;padding:2px 7px;border-radius:99px;letter-spacing:.02em}
+.chip.ok{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+.chip.bad{background:color-mix(in srgb,var(--bad) 16%,transparent);color:var(--bad)}
+.paybtn{border:1px solid var(--line);background:var(--paper);border-radius:99px;padding:3px 10px;font-size:12px;color:var(--accent)}
+/* envelopes */
+.env{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:10px}
+.env h3{margin:0 0 6px;font:600 16px/1.3 var(--f-body)}
+.env .stan{font:800 30px/1.1 var(--f-display);font-variant-numeric:tabular-nums}
+.env .grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:13px;color:var(--muted);margin:8px 0 10px}
+.env .grid2 b{display:block;color:var(--ink);font-weight:500}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--paper);border-radius:12px;padding:9px 14px;font-weight:500}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.danger{color:var(--bad)}
+/* plan editor */
+.pe{display:grid;grid-template-columns:1fr 112px;gap:8px;align-items:center;padding:9px 14px;border-top:1px solid var(--line)}
+.pe:first-child{border-top:0}
+.pe label{font-size:14px}
+.pe input{width:100%;text-align:right;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--paper)}
+.pe input.dirty{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--paper))}
+.stickybar{position:sticky;bottom:calc(env(safe-area-inset-bottom) + 64px);display:flex;gap:8px;padding:10px 0;background:linear-gradient(to top,var(--paper) 70%,transparent)}
+.prose{max-width:65ch}
+.prose h2{font:800 20px/1.2 var(--f-display);margin:20px 0 6px}
+.prose p,.prose li{color:var(--ink)}
+.prose .muted{color:var(--muted)}
+textarea.csv{width:100%;min-height:120px;font:12px/1.4 var(--f-num);border:1px solid var(--line);border-radius:10px;background:var(--card);padding:8px}
+/* tabs + fab */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;justify-content:center;gap:4px;padding:8px 12px calc(env(safe-area-inset-bottom) + 8px);background:color-mix(in srgb,var(--paper) 92%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--line)}
+.tabs a{flex:1;max-width:130px;text-align:center;padding:9px 6px;border-radius:12px;color:var(--muted);text-decoration:none;font-weight:500;font-size:14px}
+.tabs a[aria-current="page"]{background:var(--card);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+#fab{flex:0 0 auto;border:0;border-radius:14px;padding:9px 16px;background:var(--accent);color:#fff;font-weight:600;font-size:15px;box-shadow:0 4px 14px rgba(20,40,120,.25)}
+#fab[hidden]{display:none !important}
+/* sheet */
+.sheet{position:fixed;inset:0;z-index:40;display:flex;align-items:flex-end;justify-content:center}
+.sheet[hidden]{display:none}
+.sheet-bg{position:absolute;inset:0;background:rgba(10,16,20,.45)}
+.sheet-card{position:relative;width:100%;max-width:560px;max-height:88%;overflow:auto;background:var(--card);border-radius:22px 22px 0 0;padding:18px 16px calc(env(safe-area-inset-bottom) + 18px)}
+.sheet-card h3{margin:0 0 4px;font:800 22px/1.2 var(--f-display);text-wrap:balance}
+.sheet-card .sub{color:var(--muted);font-size:13px;margin-bottom:12px}
+.f{display:grid;gap:10px}
+.f label{display:grid;gap:4px;font-size:13px;color:var(--muted)}
+.f input,.f select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:12px;background:var(--paper);font-size:16px}
+.amount{display:grid;grid-template-columns:1fr 52px;gap:6px}
+.amount button{border:1px solid var(--line);border-radius:12px;background:var(--paper);font-size:22px;font-weight:600}
+.hint{font-size:13px;min-height:18px}
+.entries{list-style:none;margin:0 0 14px;padding:0;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.entries li{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:9px 12px;border-top:1px solid var(--line);font-size:14px}
+.entries li:first-child{border-top:0}
+.entries .d{color:var(--muted);font-size:12px}
+.entries .x{border:0;background:none;color:var(--bad);font-size:13px;padding:4px 6px}
+.empty{color:var(--muted);font-size:14px;padding:10px 0}
+@media (prefers-reduced-motion: no-preference){
+  .sheet-card{animation:up .18s ease-out}
+  @keyframes up{from{transform:translateY(24px);opacity:.6}to{transform:none;opacity:1}}
+}
+@media (max-width:380px){ .hero .big{font-size:38px} #monthLabel{min-width:112px} }
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <div class="brand">Budżet</div>
+    <div class="monthnav">
+      <button id="prev" type="button" aria-label="Poprzedni miesiąc">‹</button>
+      <span id="monthLabel">–</span>
+      <button id="next" type="button" aria-label="Następny miesiąc">›</button>
+    </div>
+  </header>
+  <div id="status" class="status">Wczytuję dane…</div>
+  <main id="view"></main>
+</div>
+<nav class="tabs" aria-label="Widoki">
+  <a href="#miesiac" data-v="miesiac">Miesiąc</a>
+  <a href="#koperty" data-v="koperty">Koperty</a>
+  <button id="fab" type="button" aria-label="Dodaj wpis">+ Dodaj</button>
+  <a href="#plan" data-v="plan">Plan</a>
+  <a href="#wiecej" data-v="wiecej">Więcej</a>
+</nav>
+<div id="sheet" class="sheet" hidden>
+  <div class="sheet-bg" data-action="close"></div>
+  <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" id="sheetCard"></div>
+</div>
+<script>
+"use strict";
+const GROUPS = [
+  {id:"dochod", name:"Dochód"},
+  {id:"stale", name:"Koszty stałe"},
+  {id:"zmienne", name:"Wydatki zmienne"},
+  {id:"koperty", name:"Koperty – wpłaty"},
+  {id:"inne", name:"Oszczędności i jednorazowe"}
+];
+const EXPENSE_GROUPS = ["stale","zmienne","koperty","inne"];
+const MONTHS_PL = ["styczeń","luty","marzec","kwiecień","maj","czerwiec","lipiec","sierpień","wrzesień","październik","listopad","grudzień"];
+
+let PLAN = null, MONTHS = {}, cur = null, view = "miesiac";
+
+const nf = new Intl.NumberFormat("pl-PL",{minimumFractionDigits:2,maximumFractionDigits:2});
+const nf0 = new Intl.NumberFormat("pl-PL",{maximumFractionDigits:0});
+const zl = v => nf.format(v) + " zł";
+const zl0 = v => nf0.format(Math.round(v)) + " zł";
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const $ = s => document.querySelector(s);
+
+/* ---------- logika (czyste funkcje) ---------- */
+function parseExpr(raw){
+  let s = String(raw || "").replace(/\s+/g,"").replace(/^=/,"").replace(/,/g,".");
+  if (!s) return null;
+  if (!/^[+-]?\d+(\.\d{1,2})?([+-]\d+(\.\d{1,2})?)*$/.test(s)) return null;
+  const parts = s.match(/[+-]?\d+(\.\d+)?/g);
+  const sum = parts.reduce((a,p) => a + parseFloat(p), 0);
+  return Math.round(sum * 100) / 100;
+}
+function catsOf(group){ return PLAN.categories.filter(c => c.group === group); }
+function catById(id){ return PLAN.categories.find(c => c.id === id); }
+function monthIdx(key){ return PLAN.months.findIndex(m => m.key === key); }
+function entriesOf(key){ return (MONTHS[key] && MONTHS[key].entries) || []; }
+function stats(key){
+  const m = PLAN.months[monthIdx(key)];
+  const e = entriesOf(key);
+  const act = {}, out = {};
+  for (const x of e){
+    if (x.kind === "z_koperty") out[x.cat] = (out[x.cat] || 0) + x.amount;
+    else act[x.cat] = (act[x.cat] || 0) + x.amount;
+  }
+  const sumPlan = g => catsOf(g).reduce((a,c) => a + (m.plan[c.id] || 0), 0);
+  const sumAct = g => catsOf(g).reduce((a,c) => a + (act[c.id] || 0), 0);
+  const g = {};
+  for (const gr of GROUPS) g[gr.id] = {plan: sumPlan(gr.id), act: sumAct(gr.id)};
+  const expPlan = EXPENSE_GROUPS.reduce((a,x) => a + g[x].plan, 0);
+  const expAct = EXPENSE_GROUPS.reduce((a,x) => a + g[x].act, 0);
+  const has = e.length > 0;
+  return {m, act, out, g, incPlan:g.dochod.plan, incAct:g.dochod.act, expPlan, expAct,
+          saldoPlan:g.dochod.plan - expPlan, saldoAct: has ? g.dochod.act - expAct : null, has};
+}
+function buffers(key){
+  const idx = monthIdx(key);
+  let bp = PLAN.start || 0, ba = PLAN.start || 0, any = false;
+  for (let i = 0; i <= idx; i++){
+    const s = stats(PLAN.months[i].key);
+    bp += s.saldoPlan;
+    if (s.has){ ba += s.saldoAct; any = true; }
+  }
+  return {plan:bp, act: any ? ba : null};
+}
+function envelope(id, key){
+  const idx = monthIdx(key);
+  let planned = 0, paid = 0, spent = 0;
+  for (let i = 0; i <= idx; i++){
+    const k = PLAN.months[i].key, s = stats(k);
+    planned += PLAN.months[i].plan[id] || 0;
+    paid += s.act[id] || 0;
+    spent += s.out[id] || 0;
+  }
+  return {planned, paid, spent, stan: paid - spent};
+}
+
+/* ---------- zapis w pamięci telefonu ---------- */
+const LS_KEY = "budzet-patryk-v1", LS_BACKUP = "budzet-patryk-v1-backup";
+function setStatus(text, err){
+  const el = $("#status");
+  if (!text){ el.hidden = true; return; }
+  el.hidden = false; el.textContent = text; el.classList.toggle("err", !!err);
+}
+function saveLocal(){
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify({app:"budzet", version:1, plan:PLAN, months:MONTHS, savedAt:new Date().toISOString()}));
+    return true;
+  } catch(e){
+    setStatus("Nie mogę zapisać danych w pamięci telefonu. Zrób kopię zapasową w zakładce „Więcej”.", true);
+    return false;
+  }
+}
+function loadLocal(){
+  try { const s = localStorage.getItem(LS_KEY); return s ? JSON.parse(s) : null; } catch(e){ return null; }
+}
+function lastBackup(){ try { return localStorage.getItem(LS_BACKUP); } catch(e){ return null; } }
+function markBackup(){ try { localStorage.setItem(LS_BACKUP, new Date().toISOString()); } catch(e){} }
+function writeMonth(){ saveLocal(); }
+function writePlan(){ saveLocal(); }
+function addEntry(key, entry){
+  MONTHS[key] = {entries: [...entriesOf(key), entry]};
+  writeMonth(key); render();
+}
+function removeEntry(key, id){
+  MONTHS[key] = {entries: entriesOf(key).filter(x => x.id !== id)};
+  writeMonth(key); render();
+}
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+function validPlan(o){
+  return o && Array.isArray(o.categories) && Array.isArray(o.months) && o.months.length > 0 &&
+    o.months.every(m => m && typeof m.key === "string" && m.plan && typeof m.plan === "object");
+}
+function importData(obj){
+  if (obj && obj.app === "budzet" && validPlan(obj.plan)){
+    PLAN = obj.plan; MONTHS = obj.months || {};
+  } else if (validPlan(obj)){
+    PLAN = obj; MONTHS = MONTHS && PLAN ? MONTHS : {};
+  } else return false;
+  for (const k of Object.keys(MONTHS)) MONTHS[k] = {entries: (MONTHS[k].entries || []).filter(x => x && typeof x.amount === "number")};
+  cur = pickCurrent();
+  saveLocal();
+  return true;
+}
+async function shareOrDownload(name, text, mime){
+  const blob = new Blob([text], {type: mime});
+  try {
+    const file = new File([blob], name, {type: mime});
+    if (navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:name}); return "shared"; }
+  } catch(e){ if (e && e.name === "AbortError") return "aborted"; }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  return "downloaded";
+}
+function backupText(){ return JSON.stringify({app:"budzet", version:1, plan:PLAN, months:MONTHS, savedAt:new Date().toISOString()}); }
+function readFileInput(input, done){
+  const f = input.files && input.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => { let obj = null; try { obj = JSON.parse(r.result); } catch(e){} done(obj); };
+  r.onerror = () => done(null);
+  r.readAsText(f);
+}
+
+/* ---------- widoki ---------- */
+function pct(a,p){ return p > 0 ? Math.min(100, a / p * 100) : (a > 0 ? 100 : 0); }
+function rowHTML(c, s){
+  const plan = s.m.plan[c.id] || 0, act = s.act[c.id] || 0;
+  if (plan === 0 && act === 0 && c.group !== "dochod") return "";
+  const income = c.group === "dochod";
+  const left = income ? act - plan : plan - act;
+  const over = !income && act > plan + 0.004;
+  const done = !income && !over && plan > 0 && Math.abs(act - plan) < 0.005;
+  const cls = over ? "over" : (done ? "full" : "");
+  let chip = "";
+  if (over) chip = `<span class="chip bad">ponad plan o ${zl0(act - plan)}</span>`;
+  else if (done) chip = `<span class="chip ok">${c.group === "stale" ? "zapłacone" : "zrealizowane"}</span>`;
+  let pay = "";
+  if (c.group === "stale" && act === 0 && plan > 0) pay = `<span class="paybtn" data-action="pay" data-cat="${c.id}">✓ Zapłacone</span>`;
+  const metaLeft = income ? (act ? (Math.abs(left) < 0.5 ? "zgodnie z planem" : (left > 0 ? `+${zl0(left)} ponad plan` : `brakuje ${zl0(-left)}`)) : "nie wpisano") :
+                   (over ? "" : `zostało ${zl0(Math.max(0,left))}`);
+  return `<button class="row" type="button" data-action="detail" data-cat="${c.id}">
+    <span class="n">${esc(c.name)}</span>
+    <span class="a num">${zl0(act)} <small>/ ${zl0(plan)}</small></span>
+    <span class="bar"><i class="${cls}" style="width:${pct(act,plan)}%"></i></span>
+    <span class="meta"><span>${metaLeft}</span><span>${chip || pay}</span></span>
+  </button>`;
+}
+function renderMonth(){
+  const s = stats(cur), b = buffers(cur);
+  const zmPlan = s.g.zmienne.plan, zmAct = s.g.zmienne.act, zmLeft = zmPlan - zmAct;
+  const sal = s.saldoAct;
+  let html = `<section class="hero" aria-label="Wydatki zmienne w tym miesiącu">
+    <div class="lbl">Na wydatki zmienne zostało</div>
+    <div class="big ${zmLeft < 0 ? "bad" : ""}">${zl0(zmLeft)}</div>
+    <div class="sub">wydane ${zl0(zmAct)} z ${zl0(zmPlan)}</div>
+    <div class="tape"><i class="${zmLeft < 0 ? "over" : ""}" style="width:${pct(zmAct, zmPlan)}%"></i></div>
+  </section>`;
+  if (s.m.note) html += `<div class="monthnote">${esc(s.m.note)}</div>`;
+  const lb = lastBackup(), nEntries = PLAN.months.reduce((a,m) => a + entriesOf(m.key).length, 0);
+  if (nEntries > 0 && (!lb || Date.now() - Date.parse(lb) > 14*864e5)) html += ` <a class="monthnote" href="#wiecej" style="border-color:var(--warn);color:var(--warn);text-decoration:none">Zrób kopię zapasową danych</a>`;
+  html += `<div class="tiles">
+    <div class="tile"><div class="t">Dochód</div><div class="v num">${s.incAct ? zl0(s.incAct) : "—"}</div><div class="p num">plan ${zl0(s.incPlan)}</div></div>
+    <div class="tile"><div class="t">Wydatki razem</div><div class="v num">${zl0(s.expAct)}</div><div class="p num">plan ${zl0(s.expPlan)}</div></div>
+    <div class="tile"><div class="t">Saldo na dziś</div><div class="v num ${sal == null ? "" : (sal >= 0 ? "pos" : "neg")}">${sal == null ? "—" : zl0(sal)}</div><div class="p num">plan ${zl0(s.saldoPlan)}</div></div>
+    <div class="tile"><div class="t">Bufor na dziś</div><div class="v num ${b.act == null ? "" : (b.act >= 0 ? "pos" : "neg")}">${b.act == null ? "—" : zl0(b.act)}</div><div class="p num">plan ${zl0(b.plan)}</div></div>
+  </div>`;
+  for (const gr of GROUPS){
+    const rows = catsOf(gr.id).map(c => rowHTML(c, s)).join("");
+    if (!rows) continue;
+    const gs = s.g[gr.id];
+    html += `<div class="group"><h2>${gr.name}</h2><span class="gs num">${zl0(gs.act)} / ${zl0(gs.plan)}</span></div><div class="list">${rows}</div>`;
+  }
+  const hidden = PLAN.categories.filter(c => c.group !== "dochod" && !(s.m.plan[c.id] || 0) && !(s.act[c.id] || 0));
+  if (hidden.length) html += `<p class="empty">Pozycje z planem 0 zł (${hidden.map(c => esc(c.name)).join(", ")}) pokażą się, gdy coś do nich dopiszesz przyciskiem „+ Dodaj”.</p>`;
+  $("#view").innerHTML = html;
+}
+function renderEnvelopes(){
+  const s = stats(cur);
+  let html = `<div class="group"><h2>Stan kopert na koniec: ${esc(s.m.label)}</h2></div>`;
+  for (const c of catsOf("koperty")){
+    const e = envelope(c.id, cur);
+    const plan = s.m.plan[c.id] || 0, act = s.act[c.id] || 0;
+    html += `<div class="env">
+      <h3>${esc(c.name)}</h3>
+      <div class="stan num">${zl0(e.stan)}</div>
+      <div class="grid2">
+        <div>Wpłacone łącznie<b class="num">${zl0(e.paid)}</b></div>
+        <div>Wydane z koperty<b class="num">${zl0(e.spent)}</b></div>
+        <div>Wpłata w tym miesiącu<b class="num">${zl0(act)} / ${zl0(plan)}</b></div>
+        <div>Według planu powinno być<b class="num">${zl0(e.planned)}</b></div>
+      </div>
+      <div class="btns">
+        ${act < plan - 0.004 ? `<button class="btn primary" type="button" data-action="envpay" data-cat="${c.id}">Wpłać ${zl0(plan - act)}</button>` : ""}
+        <button class="btn" type="button" data-action="add" data-cat="out:${c.id}">Wydaj z koperty</button>
+        <button class="btn" type="button" data-action="detail" data-cat="${c.id}">Historia</button>
+      </div>
+    </div>`;
+  }
+  $("#view").innerHTML = html;
+}
+function renderPlan(){
+  const s = stats(cur);
+  let html = `<div class="prose"><p class="muted">Kwoty planu na ${esc(s.m.label)}. Zmień pole i zapisz dla tego miesiąca albo od tego miesiąca do końca planu.</p></div>`;
+  for (const gr of GROUPS){
+    html += `<div class="group"><h2>${gr.name}</h2></div><div class="list">`;
+    for (const c of catsOf(gr.id)){
+      const v = s.m.plan[c.id] || 0;
+      html += `<div class="pe"><label for="pe-${c.id}">${esc(c.name)}</label><input id="pe-${c.id}" class="num" inputmode="decimal" data-cat="${c.id}" data-orig="${v}" value="${nf.format(v)}"></div>`;
+    }
+    html += `</div>`;
+  }
+  html += `<div class="stickybar"><button class="btn primary" type="button" data-action="saveplan" data-scope="fwd">Zapisz od ${esc(s.m.label)}</button><button class="btn" type="button" data-action="saveplan" data-scope="one">Tylko ten miesiąc</button></div>`;
+  $("#view").innerHTML = html;
+}
+function csvText(){
+  const lines = ["miesiac;data;kategoria;rodzaj;kwota;zapis;opis"];
+  for (const m of PLAN.months){
+    for (const x of entriesOf(m.key)){
+      const c = catById(x.cat);
+      lines.push([m.key, x.date || "", c ? c.name : x.cat, x.kind === "z_koperty" ? "wydane z koperty" : (c && c.group === "dochod" ? "wpływ" : "wydatek"),
+        String(x.amount).replace(".", ","), x.expr || "", (x.note || "").replace(/[;\n]/g, " ")].join(";"));
+    }
+  }
+  return lines.join("\n");
+}
+function renderMore(){
+  const r = PLAN.reserve || {};
+  const total = (r.gotowka||0) + (r.drugie_konto||0) + (r.inwestycje||0);
+  const n = PLAN.months.reduce((a,m) => a + entriesOf(m.key).length, 0);
+  const lb = lastBackup();
+  $("#view").innerHTML = `<div class="prose">
+    <h2>Kopia zapasowa</h2>
+    <p>Dane są zapisane tylko w tym telefonie. iOS może wyczyścić dane strony, której długo nie otwierasz, więc co jakiś czas zapisz kopię w Plikach albo na iCloud.</p>
+    <p class="muted">Wpisów: ${n}. Ostatnia kopia: ${lb ? esc(new Date(lb).toLocaleString("pl-PL")) : "jeszcze nie było"}.</p>
+    <div class="btns">
+      <button class="btn primary" type="button" data-action="backup">Zapisz kopię</button>
+      <label class="btn" for="restoreFile">Przywróć z kopii</label>
+    </div>
+    <input type="file" id="restoreFile" accept="application/json,.json,text/plain" hidden>
+    <p class="hint" id="backupHint"></p>
+    <h2>Eksport do Excela</h2>
+    <p class="muted">Plik CSV z wpisami (separator: średnik).</p>
+    <div class="btns"><button class="btn" type="button" data-action="savecsv">Zapisz CSV</button><button class="btn" type="button" data-action="copycsv">Kopiuj CSV</button></div>
+    <p class="hint" id="copyHint"></p>
+    <h2>Rezerwa poza planem</h2>
+    <p><span class="num">${zl0(total)}</span>: gotówka <span class="num">${zl0(r.gotowka||0)}</span>, drugie konto <span class="num">${zl0(r.drugie_konto||0)}</span>, inwestycje <span class="num">${zl0(r.inwestycje||0)}</span>. Plan ich nie używa – to pieniądze na ostateczność.</p>
+    <h2>Kilka kwot naraz</h2>
+    <p>W polu kwoty wpisz np. <span class="num">212,87+86</span>. Przycisk <b>+</b> obok pola dopisuje plus, bo klawiatura numeryczna iPhone'a go nie ma.</p>
+    <h2>Ikona na ekranie iPhone'a</h2>
+    <ol><li>Otwórz tę stronę w Safari.</li><li>Stuknij „Udostępnij”.</li><li>Wybierz „Do ekranu początkowego”.</li></ol>
+    <h2>Zacznij od nowa</h2>
+    <p class="muted">Usuwa plan i wszystkie wpisy z tego telefonu. Najpierw zapisz kopię.</p>
+    <div class="btns"><button class="btn danger" type="button" data-action="wipe">Usuń dane z telefonu</button></div>
+    <p class="muted">Plan pochodzi z arkusza ${esc(PLAN.source || "")}.</p>
+  </div>`;
+}
+function renderImport(){
+  $("#monthLabel").textContent = "";
+  $("#prev").hidden = $("#next").hidden = true;
+  document.querySelector(".tabs").hidden = true; $("#fab").hidden = true;
+  $("#view").innerHTML = `<div class="prose">
+    <h2>Wczytaj swój plan</h2>
+    <p>Aplikacja trzyma wszystko w pamięci tego telefonu. Na start wczytaj plik z planem (<span class="mono">budzet-plan.json</span>) albo swoją kopię zapasową.</p>
+    <div class="btns"><label class="btn primary" for="importFile">Wybierz plik</label></div>
+    <input type="file" id="importFile" accept="application/json,.json,text/plain" hidden>
+    <p class="muted">Plik z planem znajdziesz w rozmowie z Claude. Na iPhonie zapisz go najpierw w aplikacji Pliki.</p>
+    <details><summary>Albo wklej treść pliku</summary>
+      <textarea class="csv" id="importText" aria-label="Treść pliku z planem"></textarea>
+      <div class="btns"><button class="btn" type="button" data-action="importtext">Wczytaj wklejony tekst</button></div>
+    </details>
+  </div>`;
+}
+function render(){
+  if (!PLAN){ renderImport(); return; }
+  $("#prev").hidden = $("#next").hidden = false;
+  document.querySelector(".tabs").hidden = false;
+  const i = monthIdx(cur);
+  $("#monthLabel").textContent = PLAN.months[i].label;
+  $("#prev").disabled = i <= 0;
+  $("#next").disabled = i >= PLAN.months.length - 1;
+  document.querySelectorAll(".tabs a").forEach(a => a.setAttribute("aria-current", a.dataset.v === view ? "page" : "false"));
+  $("#fab").hidden = view === "plan" || view === "wiecej";
+  if (view === "koperty") renderEnvelopes();
+  else if (view === "plan") renderPlan();
+  else if (view === "wiecej") renderMore();
+  else renderMonth();
+}
+
+/* ---------- arkusz dolny: dodawanie i historia ---------- */
+function catOptions(sel){
+  let o = "";
+  for (const gr of GROUPS){
+    o += `<optgroup label="${gr.name}">` + catsOf(gr.id).map(c => `<option value="${c.id}" ${sel === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("") + `</optgroup>`;
+  }
+  o += `<optgroup label="Wydane z koperty">` + catsOf("koperty").map(c => `<option value="out:${c.id}" ${sel === "out:" + c.id ? "selected" : ""}>z koperty: ${esc(c.name)}</option>`).join("") + `</optgroup>`;
+  return o;
+}
+function defaultDate(){
+  const t = new Date(), k = t.getFullYear() + "-" + String(t.getMonth()+1).padStart(2,"0");
+  if (k === cur) return t.toISOString().slice(0,10);
+  return cur + "-01";
+}
+function formHTML(sel, fixedCat){
+  return `<form class="f" id="addForm" novalidate>
+    ${fixedCat ? `<input type="hidden" id="f-cat" value="${esc(sel)}">` : `<label for="f-cat">Kategoria<select id="f-cat">${catOptions(sel)}</select></label>`}
+    <label for="f-amt">Kwota (możesz dodawać: 212,87+86)
+      <span class="amount"><input id="f-amt" class="num" inputmode="decimal" autocomplete="off" placeholder="0,00"><button type="button" data-action="plus" aria-label="Dopisz plus">+</button></span>
+    </label>
+    <div class="hint num" id="f-sum" aria-live="polite"></div>
+    <label for="f-note">Opis (opcjonalnie)<input id="f-note" autocomplete="off" maxlength="120"></label>
+    <label for="f-date">Data<input id="f-date" type="date" value="${defaultDate()}"></label>
+    <button class="btn primary" type="submit">Zapisz</button>
+  </form>`;
+}
+function openSheet(html){
+  $("#sheetCard").innerHTML = html;
+  $("#sheet").hidden = false;
+  const a = $("#f-amt"); if (a) setTimeout(() => a.focus(), 60);
+}
+function closeSheet(){ $("#sheet").hidden = true; $("#sheetCard").innerHTML = ""; }
+function openAdd(sel){
+  const m = PLAN.months[monthIdx(cur)];
+  openSheet(`<h3 id="sheetTitle">Dodaj wpis</h3><div class="sub">${esc(m.label)}</div>${formHTML(sel || "jedzenie", false)}`);
+}
+function openDetail(catId){
+  const c = catById(catId), s = stats(cur);
+  const list = entriesOf(cur).filter(x => x.cat === catId);
+  const plan = s.m.plan[catId] || 0, act = s.act[catId] || 0;
+  const items = list.length ? `<ul class="entries">${list.map(x => `<li>
+      <span>${esc(x.note || (x.kind === "z_koperty" ? "wydane z koperty" : "bez opisu"))}<br><span class="d">${esc(x.date || "")}${x.expr && x.expr !== String(x.amount) ? " · " + esc(x.expr) : ""}</span></span>
+      <span class="num">${x.kind === "z_koperty" ? "−" : ""}${zl(x.amount)}</span>
+      <button class="x" type="button" data-action="del" data-id="${x.id}">Usuń</button></li>`).join("")}</ul>` : `<p class="empty">Brak wpisów w tym miesiącu.</p>`;
+  const extra = s.m.oneoffDesc && catId === "jednorazowe" ? `<div class="sub">W planie: ${esc(s.m.oneoffDesc)}</div>` : "";
+  openSheet(`<h3 id="sheetTitle">${esc(c.name)}</h3>
+    <div class="sub num">${esc(s.m.label)} · wpisane ${zl(act)} z ${zl(plan)}</div>${extra}
+    ${items}${formHTML(catId, true)}`);
+}
+function updateSum(){
+  const a = $("#f-amt"), out = $("#f-sum");
+  if (!a || !out) return;
+  const v = a.value.trim();
+  if (!v){ out.textContent = ""; return; }
+  const n = parseExpr(v);
+  out.textContent = n == null ? "Wpisz liczby i plusy, np. 212,87+86" : "= " + zl(n);
+  out.className = "hint num " + (n == null ? "neg" : "");
+}
+function submitAdd(){
+  const raw = $("#f-amt").value, amount = parseExpr(raw);
+  if (amount == null || amount === 0){ updateSum(); $("#f-amt").focus(); return; }
+  let cat = $("#f-cat").value, kind = "wydatek";
+  if (cat.startsWith("out:")){ cat = cat.slice(4); kind = "z_koperty"; }
+  else if ((catById(cat) || {}).group === "dochod") kind = "wplyw";
+  addEntry(cur, {id:newId(), cat, kind, amount, expr: raw.trim(), note: $("#f-note").value.trim(), date: $("#f-date").value || defaultDate(), ts: Date.now()});
+  closeSheet();
+}
+
+/* ---------- zdarzenia ---------- */
+document.addEventListener("click", ev => {
+  const t = ev.target.closest("[data-action]");
+  if (!t) return;
+  const a = t.dataset.action;
+  if (a === "close") closeSheet();
+  else if (a === "detail") openDetail(t.dataset.cat);
+  else if (a === "add") openAdd(t.dataset.cat);
+  else if (a === "plus"){ const i = $("#f-amt"); i.value = i.value.replace(/\+$/,"") + "+"; i.focus(); updateSum(); }
+  else if (a === "pay"){
+    ev.stopPropagation();
+    const plan = PLAN.months[monthIdx(cur)].plan[t.dataset.cat] || 0;
+    addEntry(cur, {id:newId(), cat:t.dataset.cat, kind:"wydatek", amount:plan, expr:String(plan).replace(".",","), note:"zapłacone wg planu", date:defaultDate(), ts:Date.now()});
+  }
+  else if (a === "envpay"){
+    const s = stats(cur), id = t.dataset.cat, left = Math.round(((s.m.plan[id]||0) - (s.act[id]||0))*100)/100;
+    addEntry(cur, {id:newId(), cat:id, kind:"wydatek", amount:left, expr:String(left).replace(".",","), note:"wpłata do koperty", date:defaultDate(), ts:Date.now()});
+  }
+  else if (a === "del"){
+    if (t.dataset.confirm === "1"){ const cat = entriesOf(cur).find(x => x.id === t.dataset.id)?.cat; removeEntry(cur, t.dataset.id); if (cat) openDetail(cat); }
+    else { t.dataset.confirm = "1"; t.textContent = "Na pewno?"; setTimeout(() => { if (t.isConnected){ t.dataset.confirm = ""; t.textContent = "Usuń"; } }, 3000); }
+  }
+  else if (a === "saveplan"){
+    const fwd = t.dataset.scope === "fwd", i0 = monthIdx(cur);
+    let changed = 0, bad = false;
+    document.querySelectorAll(".pe input").forEach(inp => {
+      const v = parseExpr(inp.value);
+      if (v == null){ bad = true; inp.classList.add("dirty"); return; }
+      if (Math.abs(v - parseFloat(inp.dataset.orig)) < 0.005) return;
+      changed++;
+      for (let i = i0; i < (fwd ? PLAN.months.length : i0 + 1); i++) PLAN.months[i].plan[inp.dataset.cat] = v;
+    });
+    if (bad){ setStatus("Popraw zaznaczone kwoty – wpisz liczbę, np. 450 albo 450,50.", true); return; }
+    if (!changed){ setStatus("Nic się nie zmieniło."); setTimeout(() => setStatus(""), 2000); return; }
+    writePlan(); setStatus("Zapisano zmiany planu: " + changed + (fwd ? " (od tego miesiąca do końca)." : " (tylko ten miesiąc).")); setTimeout(() => setStatus(""), 3000); render();
+  }
+  else if (a === "copycsv"){
+    const hint = $("#copyHint");
+    navigator.clipboard.writeText(csvText()).then(() => { hint.textContent = "Skopiowano. Wklej w Excelu."; },
+      () => { hint.textContent = "Nie udało się skopiować. Użyj „Zapisz CSV”."; });
+  }
+  else if (a === "savecsv"){
+    shareOrDownload("budzet-wpisy-" + new Date().toISOString().slice(0,10) + ".csv", "\ufeff" + csvText(), "text/csv").then(r => { if (r !== "aborted") $("#copyHint").textContent = "Gotowe."; });
+  }
+  else if (a === "backup"){
+    shareOrDownload("budzet-kopia-" + new Date().toISOString().slice(0,10) + ".json", backupText(), "application/json").then(r => {
+      if (r === "aborted") return;
+      markBackup(); $("#backupHint").textContent = "Kopia zapisana. Trzymaj plik w Plikach albo na iCloud."; render();
+    });
+  }
+  else if (a === "importtext"){
+    let obj = null; try { obj = JSON.parse($("#importText").value); } catch(e){}
+    if (obj && importData(obj)){ setStatus(""); location.hash = "#miesiac"; render(); }
+    else setStatus("To nie wygląda na plik planu ani kopię budżetu. Sprawdź, czy wkleiłeś całą treść.", true);
+  }
+  else if (a === "wipe"){
+    if (t.dataset.confirm === "1"){ try { localStorage.removeItem(LS_KEY); } catch(e){} PLAN = null; MONTHS = {}; render(); }
+    else { t.dataset.confirm = "1"; t.textContent = "Na pewno? Stuknij jeszcze raz"; setTimeout(() => { if (t.isConnected){ t.dataset.confirm = ""; t.textContent = "Usuń dane z telefonu"; } }, 4000); }
+  }
+});
+document.addEventListener("input", ev => {
+  if (ev.target.id === "f-amt") updateSum();
+  if (ev.target.matches(".pe input")) ev.target.classList.toggle("dirty", parseExpr(ev.target.value) !== parseFloat(ev.target.dataset.orig));
+});
+document.addEventListener("change", ev => {
+  if (ev.target.id === "importFile" || ev.target.id === "restoreFile"){
+    const restore = ev.target.id === "restoreFile";
+    readFileInput(ev.target, obj => {
+      if (obj && importData(obj)){ setStatus(restore ? "Przywrócono dane z kopii." : ""); if (restore) setTimeout(() => setStatus(""), 3000); location.hash = "#miesiac"; render(); }
+      else setStatus("Nie mogę odczytać tego pliku. Wybierz plik planu (budzet-plan.json) albo kopię budżetu.", true);
+      ev.target.value = "";
+    });
+  }
+});
+document.addEventListener("submit", ev => { if (ev.target.id === "addForm"){ ev.preventDefault(); submitAdd(); } });
+document.addEventListener("keydown", ev => { if (ev.key === "Escape" && !$("#sheet").hidden) closeSheet(); });
+$("#fab").addEventListener("click", () => openAdd(view === "koperty" ? "out:k_podroze" : "jedzenie"));
+$("#prev").addEventListener("click", () => { const i = monthIdx(cur); if (i > 0){ cur = PLAN.months[i-1].key; render(); } });
+$("#next").addEventListener("click", () => { const i = monthIdx(cur); if (i < PLAN.months.length - 1){ cur = PLAN.months[i+1].key; render(); } });
+function route(){ const h = (location.hash || "").slice(1); view = ["miesiac","koperty","plan","wiecej"].includes(h) ? h : "miesiac"; if (PLAN) render(); }
+window.addEventListener("hashchange", route);
+route();
+
+/* ---------- start ---------- */
+function pickCurrent(){
+  const t = new Date(), k = t.getFullYear() + "-" + String(t.getMonth()+1).padStart(2,"0");
+  if (PLAN.months.some(m => m.key === k)) return k;
+  return k < PLAN.months[0].key ? PLAN.months[0].key : PLAN.months[PLAN.months.length-1].key;
+}
+function start(){
+  const data = loadLocal();
+  if (data && validPlan(data.plan)){ PLAN = data.plan; MONTHS = data.months || {}; cur = pickCurrent(); }
+  setStatus("");
+  render();
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch(e){}
+  if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+start();
+</script>
+</body>
+</html>
